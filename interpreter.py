@@ -1,5 +1,6 @@
 # -*-coding:UTF-8-*-
 
+import sys
 import collections
 
 # VM setting
@@ -18,11 +19,12 @@ instruction = ['LEA', 'IMM', 'JMP', 'CALL', 'JZ', 'JNZ', 'ENT', 'ADJ', 'LI',
     'GE', 'SHL', 'SHR', 'ADD', 'SUB','MUL', 'DIV','MOD', 'OPEN', 'READ','CLOS',
     'PRTF', 'MALC', 'MSET', 'MCMP', 'EXIT']
 
-# lexer and parser 
-IL = None  # Intermediate language
+# lexer and parser
+IL = []  # Intermediate language
 token = None  # token in lexer
-ptr = 0  # pointer which is look in program text
-line = 0  # program line 
+token_val = None  # token value
+ptr = 0  # pointer which is pointing in program text
+line = 0  # program line
 buffer = None  # store the program text
 length = 0  # length of buffer
 
@@ -93,10 +95,17 @@ class Env(object):
 
 env_tree = Env()
 
+# C Data Type
+class Type(object):
+    CHAR = 0
+    INT = 1
+    DOUBLE = 2
+    PTR = 3
+
 # Syntax Exception
 class SyntaxException(Exception):
-    
-    def __init__(self, msg="invalid syntax"):
+
+    def __init__(self, msg='invalid syntax'):
         self.msg = msg
 
     def __str__(self):
@@ -109,12 +118,31 @@ def match(tk):
     else:
         raise SyntaxException
 
+def expression(level):
+    id = None
+    tmp = None
+    addr = None
+
+    if not token:
+        raise Exception
+        sys.exit()
+
+    if token == Tag.Num:
+        match(Tag.Num)
+        IL.append('IMM')
+        IL.append(token_val)
+        expr_type = INT
+
+
+
+
 # get the next token
 def next():
     global ptr
     global line
     global env_tree
     global token
+    global token_val
 
     while ptr <= length:
         token = buffer[ptr]
@@ -134,9 +162,9 @@ def next():
                 symbol = symbol_type()
                 env_tree.put(name,symbol)
         elif '0' <= token <= '9':
-            value = token - '0'
+            token_val = token - '0'
             while '0' <= buffer[ptr] <= '9':
-                value = value * 10 + buffer[ptr] - '0'
+                token_val = token_val * 10 + buffer[ptr] - '0'
                 ptr += 1
         elif token == '"' or token == '\'':
             last_pos = ptr - 1
@@ -197,7 +225,7 @@ def next():
                 ptr += 1
                 token = Tag.Lor
             else:
-                tokrn = Tag.Or
+                token = Tag.Or
         elif token == '&':
             if buffer[ptr] == '&':
                 ptr += 1
@@ -218,9 +246,9 @@ def next():
             pass
         return
 
-# command change to call class
+# Maybe change the commadn to callable class ?
 
-
+# exec the IL
 def execute():
     global ax
     global pc
@@ -335,7 +363,7 @@ def read(filepath):
     global buffer
     with open(filepath, 'r') as f:
         buffer = f.read()
-    
+
 
 # main function
 def main(filepath):
