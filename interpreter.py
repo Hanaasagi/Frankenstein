@@ -2,6 +2,11 @@
 
 import sys
 import collections
+# To prevert the conflict
+if sys.version_info.major > 2:
+    from builtins import id as object_id
+else:
+    from __builtin__ import id as object_id
 
 # VM setting
 STACK_MAX_SIZE = 128
@@ -23,6 +28,7 @@ instruction = ['LEA', 'IMM', 'JMP', 'CALL', 'JZ', 'JNZ', 'ENT', 'ADJ', 'LI',
 IL = []  # Intermediate language
 token = None  # token in lexer
 token_val = None  # token value
+string = ''  # parse string
 ptr = 0  # pointer which is pointing in program text
 line = 0  # program line
 buffer = None  # store the program text
@@ -102,6 +108,8 @@ class Type(object):
     DOUBLE = 2
     PTR = 3
 
+expr_type = None
+
 # Syntax Exception
 class SyntaxException(Exception):
 
@@ -122,6 +130,7 @@ def expression(level):
     id = None
     tmp = None
     addr = None
+    global expr_type
 
     if not token:
         raise Exception
@@ -131,8 +140,44 @@ def expression(level):
         match(Tag.Num)
         IL.append('IMM')
         IL.append(token_val)
-        expr_type = INT
+        expr_type = Type.INT
+    elif token == '"':
+        IL.append('IMM')
+        IL.append = token_val
+        match('"')
+        while token == '"':
+            match('"')
+            while token == '"':
+                match('"')
+        # data ??
+        #
+        # What the fuck
+        #
+        expr_type = Type.PTR
+    elif token == Tag.Sizeof:
+        # support sizeof(variable)
+        match(Tag.Sizeof)
+        match('(')
 
+        if token == Tag.INT:
+            match(Tag.INT)
+            expr_type = Type.INT
+        elif token == Tag.Char:
+            match(Tag.Char)
+            expr_type = Type.CHAR
+
+        while token == Tag.Mul:
+            match(Tag.Mul)
+            # expr_type =
+        match(')')
+
+        IL.append('IMM')
+        # CHAR 1 byte
+        # INT 4 byte
+        IL.append(1 if expr_type == Type.CHAR else 4)
+    elif token == Tag.Id:
+        match(Id)
+        id =
 
 
 
@@ -143,6 +188,7 @@ def next():
     global env_tree
     global token
     global token_val
+    global string
 
     while ptr <= length:
         token = buffer[ptr]
