@@ -25,6 +25,10 @@ instruction = ['LEA', 'IMM', 'JMP', 'CALL', 'JZ', 'JNZ', 'ENT', 'ADJ', 'LI',
     'PRTF', 'MALC', 'MSET', 'MCMP', 'EXIT']
 
 # lexer and parser
+# Maybe choose stack ??
+# IL_MAX_SIZE = 512
+# IL = [None] * IL_MAX_SIZE
+# IL_ptr = 0  # IL pointer
 IL = []  # Intermediate language
 token = None  # token in lexer
 token_val = None  # token value
@@ -270,6 +274,62 @@ def expression(level):
         match(Tag.Sub)
         if token == Tag.Num:
             IL.append('IMM')
+            IL.append(-token_val)
+            match(Tag.Num)
+        else:
+            IL.append('IMM')
+            IL.append(-1)
+            IL.append('PUSH')
+            expression(Tag.Inc)
+            IL.append('MUL')
+        expr_type = Type.INT
+    elif token == Tag.Inc  or token == Tag.Dec:
+        tmp = token
+        match(token)
+        expression(Tag.Inc)
+        if IL[-1] == 'LC':
+            IL[-1] = 'PUSH'
+            IL.append('LC')
+        elif IL[-1] == 'LI':
+            IL[-1] = 'PUSH'
+            IL.append('LI')
+        else;
+            raise Exception
+            sys.exit()
+        IL.append('PUSH')
+        IL.append('IMM')
+        IL.append(4 if expr_type > Type.PTR else 1)
+        IL.append('ADD' if tmp == Tag.Inc else 'SUB')
+        IL.append('SC' if expr_type == Type.CHAR else 'SI')
+    else:
+        raise Exception
+        sys.exit()
+
+    # ---------------------------
+    while token >= level:
+        tmp = expr_type
+        if token == Tag.Assign:
+            match(Tag.Assign)
+            if IL[-1] == 'LC' or IL[-1] == 'LI':
+                IL[-1] = 'PUSH'
+            else:
+                raise SyntaxException('bad lvalue in assignment')
+            expression(Tag.Assign)
+            expr_type = tmp
+            IL.append('SC' if expr_type == Type.CHAR else 'SI')
+        elif token == Tag.Cond:
+            match(Cond)
+            IL.append('JZ')
+
+            addr = len(IL) - 1  # get the last address
+            expression(Tag.Assign)
+            if token == ':':
+                match(':')
+            else:
+                raise Exception
+                sys.exit()
+            IL[addr] = len(IL) + 3
+
 
 
 
