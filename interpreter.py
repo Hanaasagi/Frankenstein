@@ -25,8 +25,7 @@ instruction = ['LEA', 'IMM', 'JMP', 'CALL', 'JZ', 'JNZ', 'ENT', 'ADJ', 'LI',
     'PRTF', 'MALC', 'MSET', 'MCMP', 'EXIT']
 
 # lexer and parser
-# Maybe choose stack ??
-# IL_MAX_SIZE = 512
+# IL_MAX_SIZE = 512  # Intermediate language
 # IL = [None] * IL_MAX_SIZE
 # IL_ptr = 0  # IL pointer
 IL = []  # Intermediate language
@@ -340,8 +339,178 @@ def expression(level):
             IL.append(None)
             addr = len(IL) - 1
             expression(Tag.Lan)
-            IL[addr] = len()
+            IL[addr] = len(IL)
+            expr_type = Type.INT
+        elif token == Tag.Lan:
+            match(Tag.Lan)
+            IL.append('JZ')
+            IL.append(None)
+            addr = len(IL) - 1
+            expression(Tag.Or)
+            IL[addr] = len(IL)
+            expr_type = Type.INT
+        elif token == Tag.Or:
+            match(Tag.Or)
+            IL.append('PUSH')
+            expression(Tag.Xor)
+            IL.append('OR')
+            expr_type = Type.INT
+        elif token == Tag.Xor:
+            match(Tag.Xor)
+            IL.append('PUSH')
+            expression(Tag.And)
+            IL.append('XOR')
+            expr_type = Type.INT
+        elif token == Tag.And:
+            match(Tag.And)
+            IL.append('PUSH')
+            expression(Tag.Eq)
+            IL.append('AND')
+            expr_type = Type.INT
+        elif token == Tag.Eq:
+            match(Tag.Eq)
+            IL.append('PUSH')
+            expression(Tag.Ne)
+            IL.append('EQ')
+            expr_type = Type.INT
+        elif token == Tag.Ne:
+            match(Tag.Ne)
+            IL.append('PUSH')
+            expression(Tag.Lt)
+            IL.append('NE')
+            expr_type = INT
+        elif token == Tag.Lt:
+            match(Tag.Lt)
+            IL.append('PUSH')
+            expression(Tag.Shl)
+            IL.append('LT')
+            expr_type = INT
+        elif token == Tag.Gt:
+            match(Tag.Gt)
+            IL.append('PUSH')
+            expression(Tag.Shl)
+            IL.append('GT')
+            expr_type = Type.INT
+        elif token == Tag.Le:
+            match(Tag.Le)
+            IL.append('PUSH')
+            expression(Tag.Shl)
+            Il.append('LE')
+            expr_type = Type.INT
+        elif token == Tag.Ge:
+            match(Tag.Ge)
+            IL.append('PUSH')
+            expression(Tag.Shl)
+            IL.append('GE')
+            expr_type = Type.INT
+        elif token == Tag.Shl:
+            match(Tag.Shl)
+            IL.append('PUSH')
+            expression(Tag.ADD)
+            IL.append('SHL')
+            expr_type = Type.INT
+        elif token == Tag.Shr:
+            match(Tag.Shr)
+            IL.append('PUSH')
+            expression(Tag.Add)
+            IL.append('SHR')
+            expr_type = Type.INT
+        elif token == Tag.Add:
+            match(Tag.Add)
+            IL.append('PUSH')
+            expression(Tag.Mul)
+            expr_type = tmp
+            if expr_type > Type.PTR:
+                IL.append('PUSH')
+                IL.append('IMM')
+                # need to support Char *
+                IL.append(4)
+                IL.append('MUL')
+            IL.append('ADD')
+        elif token == Tag.Sub:
+            match(Tag.Sub)
+            IL.append('PUSH')
+            expression(Tag.Mul)
+            if tmp > Type.PTR and tmp == expr_type:
+                IL.append('SUB')
+                IL.append('PUSH')
+                IL.append('IMM')
+                IL.append(4)
+                IL.append('DIV')
+                expr_type = Type.INT
+            elif tmp > Type.PTR:
+                IL.append('PUSH')
+                IL.append('IMM')
+                IL.append(4)
+                IL.append('MUL')
+                IL.append('SUB')
+                expr_type = tmp
+            else:
+                IL.append('SUB')
+                expr_type = tmp
+        elif token == Tag.Mul:
+            match(Tag.Mul)
+            IL.append('PUSH')
+            expression(Tag.Inc)
+            IL.append('MUL')
+            expr_type = tmp
+        elif token == Tag.Div:
+            match(Tag.Div)
+            IL.append('PUSH')
+            expression(Tag.Inc)
+            IL.append('DIV')
+            expre_type = tmp
+        elif token == Tag.Mod:
+            match(Tag.Mod)
+            IL.append('PUSH')
+            expression(Tag.Inc)
+            IL.append('MOD')
+            expr_type = tmp
+        elif token == Tag.Inc or token == Tag.Dec:
+            if IL[-1] == 'LI':
+                IL[-1] = 'PUSH'
+                IL.append('LI')
+            elif IL[-1] == 'LC':
+                IL[-1] = 'PUSH'
+                IL.append('LC')
+            else:
+                raise Exception
+                sys.exit()
+            IL.append('PUSH')
+            IL.append('IMM')
+            IL.append(4 if expr_type > Type.PTR else 1)
+            IL.append('ADD' if token == Tag.Inc else 'SUB')
+            IL.append('ADD' if expr_type == Type.CHAR else 'SI')
+            IL.append('PUSH')
+            IL.append('IMM')
+            IL.append(4 if expr_type > Type.PTR else 1)
+            IL.append('SUB' if token == Tag.Inc else 'ADD')
+            match(token)
+        elif token == Tag.Brak:
+            match(Tag.Brak)
+            IL.append('PUSH')
+            expression(Tag.Assign)
+            match(']')
 
+            if tmp > Type.PTR:
+                IL.append('PUSH')
+                IL.append('IMM')
+                IL.append(4)
+                IL.append('Mul')
+            elif tmp < Type.PTR:
+                raise Exception
+                sys.exit()
+            expr_type = tmp - Type.PTR
+            IL.append('ADD')
+            IL.append('LC' if expr_type == Type.CHAR else 'LI')
+        else:
+            raise Exception
+            sys.exit()
+
+
+# parse the statement
+def statement():
+    pass
 
 
 
