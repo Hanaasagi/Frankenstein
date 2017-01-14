@@ -320,7 +320,7 @@ def expression(level):
         elif token == Tag.Cond:
             match(Cond)
             IL.append('JZ')
-
+            IL.append(None)
             addr = len(IL) - 1  # get the last address
             expression(Tag.Assign)
             if token == ':':
@@ -328,7 +328,19 @@ def expression(level):
             else:
                 raise Exception
                 sys.exit()
-            IL[addr] = len(IL) + 3
+            IL[addr] = len(IL) - 1 + 3
+            IL.append('JMP')
+            IL.append(None)
+            addr = len(IL) - 1
+            expression(Tag.Cond)
+            IL[addr] = len(IL)
+        elif token == Tag.Lor:
+            match(Tag.Lor)
+            IL.append('JNZ')
+            IL.append(None)
+            addr = len(IL) - 1
+            expression(Tag.Lan)
+            IL[addr] = len()
 
 
 
