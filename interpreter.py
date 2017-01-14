@@ -177,7 +177,101 @@ def expression(level):
         IL.append(1 if expr_type == Type.CHAR else 4)
     elif token == Tag.Id:
         match(Id)
-        id =
+        id = current_id
+        if token == '(':
+            match('(')
+            tmp = 0
+            # parse the arguments
+            while token != ')':
+                expression(Assign)
+                IL.append('PUSH')
+                tmp += 1
+                if token == ',':
+                    match(',')
+            match(')')
+
+            if id.Class == Tag.Sys:
+                IL.append(id.Value)
+            elif id.Class == Tag.Fun:
+                IL.append('CALL')
+                IL.append(id.Value)
+            else:
+                raise SyntaxException('illegal function')
+                sys.exit()
+
+            # important !!!
+            if tmp > 0:
+                IL.append('ADJ')
+                IL.append(tmp)
+            expr_type = id.Type
+        elif id.Class == Tag.Num:
+            IL.append('IMM')
+            IL.append(id.Value)
+            expr_type = Type.INT
+        else:
+            if id.Class == Tag.Loc:
+                IL.append('LEA')
+                IL.append(index_of_bp - id.Value)
+            else:
+                pass
+    elif token == '(':
+        match('(')
+        if token == Tag.Int or token == Tag.Char:
+            tmp = Type.CHAR if token == Tag.Char else Type.INT
+            match(token)
+            while token == Tag.Mul:
+               match(Tag.Mul)
+               tmp = tmp + Type.PTR
+            match(')')
+            expression(Tag.Inc)
+            expression(Tag.Inc)
+        else:
+            expression(Tag.Assign)
+            match(')')
+    elif token == Tag.Mul:
+        match(Tag.Mul)
+        expression(Tag.Inc)
+        if expr_type >= Type.PTR:
+            expr_type = expr_type - Type.PTR
+        else:
+            raise SyntaxException('illegal dereference')
+            sys.exit()
+        IL.append('LC' if expr_type == Type.CHAR else 'LI')
+    elif token == Tag.And:
+        match(Tag.And)
+        expression(Tag.Inc)
+        if IL[-1] == 'LC' or IL[-1] == 'LI':
+            IL.pop()
+        else:
+            raise SyntaxException('illegal address')
+            sys.exit()
+        expr_type = expr_type + Type.PTR
+    elif token == '!':
+        match('!')
+        expression(Tag.Inc)
+        IL.append('PUSH')
+        IL.append('IMM')
+        IL.append(0)
+        IL.append('EQ')
+        expr_type = Type.INT
+    elif token == '~':
+        match('~')
+        expression(Tag.Inc)
+        IL.append('PUSH')
+        IL.append('IMM')
+        IL.append(-1)
+        IL.append('XOR')
+        expr_type = Type.INT
+    elif token == Tag.Add:
+        match(Tag.Add)
+        expression(Tag.Inc)
+        expr_type = Type.INT
+    elif token == Tag.Sub:
+        match(Tag.Sub)
+        if token == Tag.Num:
+            IL.append('IMM')
+
+
 
 
 
