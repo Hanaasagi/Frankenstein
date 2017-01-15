@@ -43,10 +43,6 @@ length = 0  # length of buffer
 
 # token's tag
 class Tag(object):
-    __slots__ = ('Num', 'Fun', 'Sys', 'Glo', 'Loc', 'Id', 'Char', 'Else', 'Enum',
-        'If', 'Int', 'Return','Sizeof', 'While','Assign', 'Cond', 'Lor', 'Lan',
-        'Or', 'Xor', 'And', 'Eq', 'Ne', 'Lt', 'Gt', 'Le', 'Ge', 'Shl', 'Shr',
-        'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Inc', 'Dec', 'Brak')
     Num = 128
     Fun = 129
     Sys = 130
@@ -594,18 +590,18 @@ def function_parameter():
 
 
 
-
+# Maybe it should be a generator
 # get the next token
 def next():
     global ptr
     global line
     global env_tree
-    globa peek
+    global peek
     global token
     global token_val
     global string
 
-    while ptr <= length:
+    while ptr < length:
         peek = buffer[ptr]
         ptr += 1
 
@@ -627,7 +623,12 @@ def next():
             # create new
             if symbol is None:
                 # here ????
-                symbol = symbol_type()
+                symbol = symbol_type(
+                    token=Tag.Id,
+                    name=name,
+                    klass=None,
+                    type=None,
+                    value=None)
                 env_tree.put(name, symbol)
                 token = symbol.token
             else:
@@ -635,15 +636,15 @@ def next():
             return
         elif '0' <= peek <= '9':
             # parse number only Decimal, not support Hex yet
-            token_val = peek - '0'
+            token_val = ord(peek) - ord('0')
             while '0' <= buffer[ptr] <= '9':
-                token_val = token_val * 10 + buffer[ptr] - '0'
+                token_val = token_val * 10 + ord(buffer[ptr]) - ord('0')
                 ptr += 1
             token = Tag.Num
             return
         elif peek == '"' or peek == '\'':
             # parse string, not support escape character
-            last_pos = ptr
+            last_pos = ptrf 4
             while buffer[ptr] != peek:
                 ptr += 1
             ptr += 1
@@ -750,6 +751,8 @@ def next():
             # parse other character and return it as token
             token = peek
             return
+        # skip other character included space tab ...
+
 
 # Maybe change the commadn to callable class ?
 
@@ -866,8 +869,10 @@ def execute():
 # read the program text
 def read(file_path):
     global buffer
+    global length
     with open(file_path, 'r') as f:
         buffer = f.read()
+    length = len(buffer)
 
 # parse the command
 def cmd_parser():
@@ -880,10 +885,26 @@ def cmd_parser():
     return args.file_path, args.debug
 
 
+def test():
+    global buffer
+    global length
+    buffer = '''
+#include <stdio.h>
+int main(void) {
+    printf("Hello World!");
+    return 0;
+}
+'''
+    length = len(buffer)
+    for i in range(length):
+        next()
+        print i,'peek: ',token
+        # print(token)
+
 if __name__ == '__main__':
     file_path, debug = cmd_parser()
-
+    test()
     # buffer = read(file_path)
 
-    IL = ['IMM', 100, 'PUSH', 'IMM', 20, 'DIV', 'PUSH', 'EXIT']
-    execute()
+    # IL = ['IMM', 100, 'PUSH', 'IMM', 20, 'DIV', 'PUSH', 'EXIT']
+    # execute()
