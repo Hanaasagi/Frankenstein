@@ -32,6 +32,7 @@ instruction = ['LEA', 'IMM', 'JMP', 'CALL', 'JZ', 'JNZ', 'ENT', 'ADJ', 'LI',
 # IL = [None] * IL_MAX_SIZE
 # IL_ptr = 0  # IL pointer
 IL = []  # Intermediate language
+peek = None
 token = None  # token in lexer
 token_val = None  # token value
 string = ''  # parse string
@@ -62,19 +63,19 @@ class Tag(object):
     While = 141
     Assign = 142
     Cond = 143
-    Lor = 144
-    Lan = 145
-    Or = 146
-    Xor = 147
-    And = 148
-    Eq = 149
-    Ne = 150
-    Lt = 151
-    Gt = 152
-    Le = 153
-    Ge = 154
-    Shl = 155
-    Shr = 156
+    Lor = 144  # logical or
+    Lan = 145  # logical and
+    Or = 146   # bit or
+    Xor = 147  
+    And = 148  # bit and
+    Eq = 149   # ==
+    Ne = 150   # !=
+    Lt = 151   # <
+    Gt = 152   # >
+    Le = 153   # <=
+    Ge = 154   # >=
+    Shl = 155  # <<
+    Shr = 156  # >>
     Add = 157
     Sub = 159
     Mul = 160
@@ -82,7 +83,7 @@ class Tag(object):
     Mod = 162
     Inc = 163
     Dec = 164
-    Brak = 165
+    Brak = 165  # [
 
 # symbol type
 symbol_type = collections.namedtuple('symbol_type', ['token', 'name', 'klass', 'type', 'value'])
@@ -599,21 +600,22 @@ def next():
     global ptr
     global line
     global env_tree
+    globa peek
     global token
     global token_val
     global string
 
     while ptr <= length:
-        token = buffer[ptr]
+        peek = buffer[ptr]
         ptr += 1
 
-        if token == '\n':
+        if peek == '\n':
             line += 1
-        elif token == '#':
-            # not support macro, skip it
+        elif peek == '#':
+            # not support macro, skip  it
             while buffer[ptr] != '\n':
                 ptr += 1
-        elif 'a' <= token <= 'z' or 'A' <= token <= 'Z' or token == '_':
+        elif 'a' <= peek <= 'z' or 'A' <= peek <= 'Z' or peek == '_':
             # parse identifier
             last_pos = ptr - 1
             while 'a' <=  buffer[ptr] <= 'z' or 'A' <= buffer[ptr] <= 'Z' \
@@ -631,51 +633,63 @@ def next():
             else:
                 token = symbol.token
             return
-        elif '0' <= token <= '9':
+        elif '0' <= peek <= '9':
             # parse number only Decimal, not support Hex yet
-            token_val = token - '0'
+            token_val = peek - '0'
             while '0' <= buffer[ptr] <= '9':
                 token_val = token_val * 10 + buffer[ptr] - '0'
                 ptr += 1
             token = Tag.Num
             return
-        elif token == '"' or token == '\'':
-            # parse string
-            last_pos = ptr - 1
-            while buffer[ptr] != token:
+        elif peek == '"' or peek == '\'':
+            # parse string, not support escape character
+            last_pos = ptr
+            while buffer[ptr] != peek:
                 ptr += 1
             ptr += 1
             string = buffer[last_pos:ptr-1]
-        elif token == '/':
+            if peek == '\'':
+                token = Tag.Num
+            return
+        elif peek == '/':
+            # parse the comment // or Div /
             if buffer[ptr] == '/':
                 while buffer[ptr] != '\n':
                     ptr += 1
             else:
                 token = Tag.Div
-        elif token == '=':
+            return
+        elif peek == '=':
+            # parse == or =
             if buffer[ptr] == '=':
                 ptr += 1
                 token = Tag.Eq
             else:
                 token = Tag.Assign
-        elif token == '+':
+            return
+        elif peek == '+':
+            # parse ++ or +
             if buffer[ptr] == '+':
                 ptr += 1
                 token = Tag.Inc
             else:
                 token = Tag.Add
-        elif token == '-':
+            return
+        elif peek == '-':
+            # parse -- or -
             if buffer[ptr] == '-':
                 ptr += 1
                 token = Tag.Dec
             else:
                 token = Tag.Sub
-        elif token == '!':
+            return
+        elif peek == '!':
+            # parse !=
             if buffer[ptr] == '=':
                 token = Tag.Ne
-            else:
-                pass
-        elif token == '<':
+            return
+        elif peek == '<':
+            # parse <= or << or <
             if buffer[ptr] == '=':
                 ptr += 1
                 token = Tag.Le
@@ -684,7 +698,9 @@ def next():
                 token = Tag.Shl
             else:
                 token = Tag.Lt
-        elif token == '>':
+            return
+        elif peek == '>':
+            # parse >= or >> or >
             if buffer[ptr] == '=':
                 ptr += 1
                 token = Tag.Ge
@@ -693,32 +709,47 @@ def next():
                 token = Tag.Shr
             else:
                 token = Tag.Gt
-        # Why ???
-        elif token == '|':
+            return
+        elif peek == '|':
+            # parse || or |
             if buffer[ptr] == '|':
                 ptr += 1
                 token = Tag.Lor
             else:
                 token = Tag.Or
-        elif token == '&':
+            return
+        elif peek == '&':
+            # parse && or &
             if buffer[ptr] == '&':
                 ptr += 1
                 token = Tag.Lan
             else:
                 token = Tag.And
-        elif token == '^':
+            return
+        elif peek == '^':
+            # parse ^
             token = Tag.Xor
-        elif token == '%':
+            return
+        elif peek == '%':
+            # parse %
             token = Tag.Mod
-        elif token == '*':
+            return
+        elif peek == '*':
+            # parse * (mul or pointer)
             token = Tag.Mul
-        elif token == '[':
+            return
+        elif peek == '[':
+            # parse [
             token = Tag.Brak
-        elif token == '?':
+            return
+        elif peek == '?':
+            # parse  condition ? a : b
             token = Tag.Cond
-        elif token in ('~', ';', '{', '}', '(', ')', ']', ',', ':'):
-            pass
-        return
+            return
+        elif peek in ('~', ';', '{', '}', '(', ')', ']', ',', ':'):
+            # parse other character and return it as token
+            token = peek
+            return
 
 # Maybe change the commadn to callable class ?
 
