@@ -2,6 +2,7 @@
 
 import sys
 import collections
+import argparse
 # To prevert the conflict
 if sys.version_info.major > 2:
     from builtins import id as object_id
@@ -15,7 +16,9 @@ MEMORY_MAX_SIZE = 1024
 # VM composition
 stack = [None] * STACK_MAX_SIZE  # stack
 memory = [None] * MEMORY_MAX_SIZE  # memory
+pc = 0  # program counter
 sp = 0  # stack pointer
+bp = 0  # stack base pointer
 ax = None  # register
 
 # VM supported inareuctions
@@ -33,7 +36,7 @@ token = None  # token in lexer
 token_val = None  # token value
 string = ''  # parse string
 ptr = 0  # pointer which is pointing in program text
-line = 0  # program line
+line = 0  # source line
 buffer = None  # store the program text
 length = 0  # length of buffer
 
@@ -82,7 +85,7 @@ class Tag(object):
     Brak = 165
 
 # symbol type
-symbol_type = collections.namedtuple('symbol_type', ['Token', 'Name', 'Class', 'Type', 'Value'])
+symbol_type = collections.namedtuple('symbol_type', ['token', 'name', 'klass', 'type', 'value'])
 
 # an Env's instance store current scope and its father scope
 class Env(object):
@@ -98,9 +101,9 @@ class Env(object):
         env = self
         while env is not None:
             if name in env.table:
-                return True
+                return env.table[name]
             env = env.pre
-        return False
+        return None
 
 env_tree = Env()
 
@@ -292,7 +295,7 @@ def expression(level):
         elif IL[-1] == 'LI':
             IL[-1] = 'PUSH'
             IL.append('LI')
-        else;
+        else:
             raise Exception
             sys.exit()
         IL.append('PUSH')
@@ -510,7 +513,82 @@ def expression(level):
 
 # parse the statement
 def statement():
-    pass
+    addr1 = None
+    addr2 = None
+    if token == Tag.If:
+        match(Tag.If)
+        match('(')
+        expression(Tag.Assign)
+        match(')')
+
+        IL.append('JZ')
+        IL.append(None)
+        addr2 = len(IL) - 1
+        statement()
+
+        if token == Tag.Else:
+            match(Tag.Else)
+
+            IL[addr2] = len(IL) + 2
+            IL.append('JMP')
+            IL.append(None)
+            addr2 = len(IL) - 1
+
+            statement()
+        IL[addr2] = len(IL)
+    elif token == Tag.While:
+        match(Tag.While)
+        addr1 = len(IL)
+        match('(')
+        expression(Tag.Assign)
+        match(')')
+        IL.append('JZ')
+        IL.append(None)
+        addr2 = len(IL) - 1
+        statement()
+        IL.append('JMP')
+        IL.append(addr1)
+        IL[addr2] = len(IL)
+    elif token == '{':
+        match('{')
+        while token != '}':
+            statement()
+        match('}')
+    elif token == Tag.Return:
+        match(Tag.Return)
+        if token != ';':
+            expression(Tag.Assign)
+        match(';')
+        IL.append('LEV')
+    elif token == ';':
+        match(';')
+    else:
+        expression(Tag.Assign)
+        match(';')
+
+def function_parameter():
+    type_ = None
+    params = 0
+    while token != ')':
+        type_ = Type.INT
+        if token == Tag.Int:
+            match(Tag.Int)
+        elif token == Tag.Char:
+            type_ = Type.CHAR
+            match(Tag.Char)
+        while token == Tag.Mul:
+            match(Tag.Mul)
+            type_ = type_ + Type.PTR
+
+        if token != Tag.Id:
+            raise Exception
+            sys.exit()
+        if current_id.Class == Tag.Loc:
+            raise Exception
+            sys.exit()
+        match(Tag.Id)
+        # here !!
+
 
 
 
@@ -532,22 +610,37 @@ def next():
         if token == '\n':
             line += 1
         elif token == '#':
+            # not support macro, skip it
             while buffer[ptr] != '\n':
                 ptr += 1
         elif 'a' <= token <= 'z' or 'A' <= token <= 'Z' or token == '_':
+            # parse identifier
             last_pos = ptr - 1
-            while 'a' <=  buffer[ptr] <= 'z' or 'A' <= buffer[ptr] <= 'Z' or '0' <= buffer[ptr] <= '9':
+            while 'a' <=  buffer[ptr] <= 'z' or 'A' <= buffer[ptr] <= 'Z' \
+                or '0' <= buffer[ptr] <= '9' or buffer == '_':
                 ptr += 1
-            name = buffer[last_pos:ptr+1]
-            if not env_tree.get(name):
+            name = buffer[last_pos:ptr]
+            # look for the current env
+            symbol = env_tree.get(name)
+            # create new
+            if symbol is None:
+                # here ????
                 symbol = symbol_type()
-                env_tree.put(name,symbol)
+                env_tree.put(name, symbol)
+                token = symbol.token
+            else:
+                token = symbol.token
+            return
         elif '0' <= token <= '9':
+            # parse number only Decimal, not support Hex yet
             token_val = token - '0'
             while '0' <= buffer[ptr] <= '9':
                 token_val = token_val * 10 + buffer[ptr] - '0'
                 ptr += 1
+            token = Tag.Num
+            return
         elif token == '"' or token == '\'':
+            # parse string
             last_pos = ptr - 1
             while buffer[ptr] != token:
                 ptr += 1
@@ -644,7 +737,7 @@ def execute():
         elif op == 'LC':
             ax = str(memory[ax])
         elif op == 'LI':
-            ax = int(memroy[ax])
+            ax = int(memory[ax])
         elif op == 'SC':
             memory[stack[sp]] = str(ax)
             sp += 1
@@ -740,19 +833,26 @@ def execute():
 
 
 # read the program text
-def read(filepath):
+def read(file_path):
     global buffer
-    with open(filepath, 'r') as f:
+    with open(file_path, 'r') as f:
         buffer = f.read()
 
+# parse the command
+def cmd_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file_path', type=str, nargs=1,
+                        help='specify your C file path')
+    parser.add_argument('--debug', dest='debug', action='store_true',
+                        help='debug mode: echo the Intermediate language')
+    args = parser.parse_args()
+    return args.file_path, args.debug
 
-# main function
-def main(filepath):
-    global buffer
-    buffer = read(filepath)
 
 if __name__ == '__main__':
-    # main()
+    file_path, debug = cmd_parser()
+
+    # buffer = read(file_path)
+
     IL = ['IMM', 100, 'PUSH', 'IMM', 20, 'DIV', 'PUSH', 'EXIT']
-    pc = 0
     execute()
