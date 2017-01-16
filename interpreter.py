@@ -14,10 +14,29 @@ STACK_MAX_SIZE = 128
 MEMORY_MAX_SIZE = 1024
 
 # VM composition
+
+# +------------------+
+# |   stack    |     |  high address
+# |   ...      v     |
+# |                  |
+# |                  |
+# |                  |
+# |                  |
+# |   ...      ^     |
+# |   heap     |     |
+# +------------------+
+# | bss segment      |
+# +------------------+
+# | data segment     |
+# +------------------+
+# | text segment     |  low address
+# +------------------+
+
+
 stack = [None] * STACK_MAX_SIZE  # stack
-memory = [None] * MEMORY_MAX_SIZE  # memory
+memory = [None] * MEMORY_MAX_SIZE  # memory (remaining memory)
 pc = 0  # program counter
-sp = 0  # stack pointer
+sp = STACK_MAX_SIZE - 1  # stack pointer
 bp = 0  # stack base pointer
 ax = None  # register
 
@@ -62,7 +81,7 @@ class Tag(object):
     Lor = 144  # logical or
     Lan = 145  # logical and
     Or = 146   # bit or
-    Xor = 147  
+    Xor = 147
     And = 148  # bit and
     Eq = 149   # ==
     Ne = 150   # !=
@@ -112,6 +131,52 @@ class Type(object):
     PTR = 3
 
 expr_type = None
+
+# C Keywords
+keywords = {
+    'char': Tag.Char,
+    'else': Tag.Else,
+    'enum': Tag.Enum,
+    'if': Tag.If,
+    'int': Tag.Int,
+    'return': Tag.Return,
+    'sizeof': Tag.Sizeof,
+    'while': Tag.While}
+
+builtin_instruction = {
+    'open':'OPEN',
+    'read':'READ',
+    'close':'CLOS',
+    'printf':'PRTF',
+    'malloc':'MALC',
+    'memset':'MSET',
+    'memcmp':'MCMP',
+    'exit':'EXIT'}
+'void', 'main'
+
+# init
+def init_env():
+    top_env = Env()
+    # put keywords to top env
+    for keyword,token in keywords.items():
+        # ['token', 'name', 'klass', 'type', 'value']
+        top_env.put(symbol_type(
+            token=token,
+            name=keyword,
+            klass=None,
+            type=None,
+            value=None)
+        )
+    # put instructions to top env
+    for instruction,value in builtin_instruction.items():
+        top_env.put(symbol_type(
+            token=None,
+            name=instruction,
+            klass=Tag.Sys,
+            type=Type.INT,
+            value=value)
+        )
+
 
 # Syntax Exception
 class SyntaxException(Exception):
@@ -644,7 +709,7 @@ def next():
             return
         elif peek == '"' or peek == '\'':
             # parse string, not support escape character
-            last_pos = ptrf 4
+            last_pos = ptr
             while buffer[ptr] != peek:
                 ptr += 1
             ptr += 1
@@ -752,6 +817,90 @@ def next():
             token = peek
             return
         # skip other character included space tab ...
+
+
+def enum_declaration():
+    i = 0
+    while token != '}':
+        if token != Tag.Id:
+            raise SyntaxException
+            sys.exit()
+        next()
+        if token == Tag.Assign:
+            # parse {a=1}
+            next()
+            if token != Tag.Num:
+                raise SyntaxException
+                sys.exit()
+            i = token_val
+            next()
+
+
+
+def function_declaration():
+    match('(')
+    function_parameter()
+    match(')')
+    match('{')
+    function_body()
+
+
+
+def global_declaration():
+    type = None
+    base_type = Type.INT
+    i = None
+
+    if token == Tag.Enum:
+        match(Tag.Enum)
+        if token != '{':
+            match(Tag.Id)
+        else:
+            match('{')
+            enum_declaration()
+            match('}')
+
+        match(';')
+        return
+
+    if token == Tag.Int:
+        match(Tag.Int)
+    elif token == Tag.Char:
+        match(Tag.Char)
+        base_type = Type.CHAR
+
+    while token != ';' and token != '}':
+        type = base_type
+        while token == Tag.Mul:
+            mathc(Tag.Mul)
+            type = type + Type.PTR
+
+        if token != Tag.Id:
+            raise SyntaxException('invalid  declaration')
+            sys.exit()
+
+        # How to avoid duplicate declaration
+
+        match(Tag.Id)
+        current_id.type = type
+
+        if token == '(':
+            current_id.klass = Tag.Fun
+            current_id.value = len(IL)
+            function_declaration()
+        else
+            # issue
+            current_id.klass = Tag.Glo
+            current_id.value = data
+            data = data + 4
+
+        if token == ',':
+            match(',')
+    next()
+
+
+
+
 
 
 # Maybe change the commadn to callable class ?
@@ -895,16 +1044,23 @@ int main(void) {
     return 0;
 }
 '''
-    length = len(buffer)
-    for i in range(length):
-        next()
-        print i,'peek: ',token
-        # print(token)
 
 if __name__ == '__main__':
     file_path, debug = cmd_parser()
     test()
     # buffer = read(file_path)
+
+
+    next()
+    while token > 0:
+        global_declaration()
+
+
+    # init stack
+    stack[sp] = 'EXIT'
+    sp -= 1
+    stack[sp] = 'PUSH'
+    sp -= 1
 
     # IL = ['IMM', 100, 'PUSH', 'IMM', 20, 'DIV', 'PUSH', 'EXIT']
     # execute()
