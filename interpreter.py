@@ -42,6 +42,8 @@ pc = 0  # program counter
 sp = STACK_MAX_SIZE - 1  # stack pointer
 bp = 0  # stack base pointer
 ax = None  # register
+index_of_bp = sp
+
 
 # VM supported inareuctions
 instruction = ['LEA', 'IMM', 'JMP', 'CALL', 'JZ', 'JNZ', 'ENT', 'ADJ', 'LI',
@@ -57,6 +59,7 @@ IL = []  # Intermediate language
 peek = None
 token = None  # token in lexer
 token_val = None  # token value
+current_id = None  # current identifier
 string = ''  # parse string
 ptr = 0  # pointer which is pointing in program text
 line = 0  # source line
@@ -103,8 +106,16 @@ class Tag(object):
     Dec = 164
     Brak = 165  # [
 
-# symbol type
-symbol_type = collections.namedtuple('symbol_type', ['token', 'name', 'klass', 'type', 'value'])
+# symbol
+class Symbol(object):
+
+    def __init__(self, token, name, klass, type, value):
+        self.token = token
+        self.name = name
+        self.klass = klass
+        self.type = type
+        self.value = value
+
 
 # an Env's instance store current scope and its father scope
 class Env(object):
@@ -159,11 +170,12 @@ builtin_instruction = {
 
 # init
 def init_env():
+    global env_tree
     top_env = Env()
     # put keywords to top env
     for keyword,token in keywords.items():
         # ['token', 'name', 'klass', 'type', 'value']
-        top_env.put(symbol_type(
+        top_env.put(keyword, Symbol(
             token=token,
             name=keyword,
             klass=None,
@@ -172,14 +184,14 @@ def init_env():
         )
     # put instructions to top env
     for instruction,value in builtin_instruction.items():
-        top_env.put(symbol_type(
+        top_env.put(instruction, Symbol(
             token=None,
             name=instruction,
             klass=Tag.Sys,
             type=Type.INT,
             value=value)
         )
-
+    env_tree.pre = top_env
 
 # Syntax Exception
 class SyntaxException(Exception):
@@ -247,7 +259,7 @@ def expression(level):
         # INT 4 byte
         IL.append(1 if expr_type == Type.CHAR else 4)
     elif token == Tag.Id:
-        match(Id)
+        match(Tag.Id)
         id = current_id
         if token == '(':
             match('(')
@@ -261,9 +273,9 @@ def expression(level):
                     match(',')
             match(')')
 
-            if id.Class == Tag.Sys:
+            if id.klass == Tag.Sys:
                 IL.append(id.Value)
-            elif id.Class == Tag.Fun:
+            elif id.klass == Tag.Fun:
                 IL.append('CALL')
                 IL.append(id.Value)
             else:
@@ -275,12 +287,12 @@ def expression(level):
                 IL.append('ADJ')
                 IL.append(tmp)
             expr_type = id.Type
-        elif id.Class == Tag.Num:
+        elif id.klass == Tag.Num:
             IL.append('IMM')
             IL.append(id.Value)
             expr_type = Type.INT
         else:
-            if id.Class == Tag.Loc:
+            if id.klass == Tag.Loc:
                 IL.append('LEA')
                 IL.append(index_of_bp - id.Value)
             else:
@@ -644,6 +656,7 @@ def next():
     global token
     global token_val
     global string
+    global current_id
 
     while ptr < length:
         peek = buffer[ptr]
@@ -662,12 +675,13 @@ def next():
                 or '0' <= buffer[ptr] <= '9' or buffer == '_':
                 ptr += 1
             name = buffer[last_pos:ptr]
+            print name
             # look for the current env
             symbol = env_tree.get(name)
             # create new
             if symbol is None:
                 # here ????
-                symbol = symbol_type(
+                symbol = Symbol(
                     token=Tag.Id,
                     name=name,
                     klass=None,
@@ -677,6 +691,7 @@ def next():
                 token = symbol.token
             else:
                 token = symbol.token
+            current_id = symbol
             return
         elif '0' <= peek <= '9':
             # parse number only Decimal, not support Hex yet
@@ -800,6 +815,7 @@ def next():
 
 def function_parameter():
     # parse function parameter, eg (int arg1, char arg2, int *arg3)
+    global index_of_bp
     params = 0
     while token != ')':
         # 
@@ -824,7 +840,7 @@ def function_parameter():
         if token == ',':
             match(',')
         # here !!
-    bp = params + 1
+    index_of_bp = params + 1
 
 
 def function_body():
@@ -898,8 +914,10 @@ def global_declaration():
             raise SyntaxException('invalid declaration')
             sys.exit()
 
-        # How to avoid duplicate declaration ??
-
+        # How to avoid duplicate declaration like this ??
+        if current_id.type is not None:
+            raise SyntaxException('duplicate declaration')
+            sys.exit()
         match(Tag.Id)
         current_id.type = type
         
@@ -1062,13 +1080,17 @@ def test():
     buffer = '''
 #include <stdio.h>
 int main(void) {
-    printf("Hello World!");
+    int i;
+    i = 0;
+    printf("Hello World! And i is %d\n", i);
     return 0;
 }
 '''
+    length = len(buffer)
 
 if __name__ == '__main__':
     file_path, debug = cmd_parser()
+    init_env()
     test()
     # buffer = read(file_path)
 
@@ -1077,12 +1099,14 @@ if __name__ == '__main__':
     while token > 0:
         global_declaration()
 
-
     # init stack
     stack[sp] = 'EXIT'
     sp -= 1
     stack[sp] = 'PUSH'
     sp -= 1
 
-    # IL = ['IMM', 100, 'PUSH', 'IMM', 20, 'DIV', 'PUSH', 'EXIT']
+    if debug:
+        print('{}\nThe following is the Intermediate language\n{}'.format(buffer,IL))
+        for instruction in IL:
+            print instruction
     # execute()
