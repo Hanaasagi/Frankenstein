@@ -12,28 +12,31 @@ else:
 # VM setting
 STACK_MAX_SIZE = 128
 MEMORY_MAX_SIZE = 1024
+DATA_MAX_SIZE = 128
 
 # VM composition
 
-# +------------------+
-# |   stack    |     |  high address
-# |   ...      v     |
-# |                  |
-# |                  |
-# |                  |
-# |                  |
-# |   ...      ^     |
-# |   heap     |     |
-# +------------------+
-# | bss segment      |
-# +------------------+
-# | data segment     |
-# +------------------+
-# | text segment     |  low address
-# +------------------+
-
+'''
++------------------+
+|   stack    |     |  high address
+|   ...      v     |
+|                  |
+|                  |
+|                  |
+|                  |
+|   ...      ^     |
+|   heap     |     |
++------------------+
+| bss segment      |
++------------------+
+| data segment     |
++------------------+
+| text segment     |  low address
++------------------+
+'''
 
 stack = [None] * STACK_MAX_SIZE  # stack
+data = [] * DATA_MAX_SIZE # data segment
 memory = [None] * MEMORY_MAX_SIZE  # memory (remaining memory)
 pc = 0  # program counter
 sp = STACK_MAX_SIZE - 1  # stack pointer
@@ -187,7 +190,7 @@ class SyntaxException(Exception):
     def __str__(self):
         return 'SyntaxError: {0}'.format(self.msg)
 
-# match the token
+# match the token and get next token
 def match(tk):
     if token == tk:
         next()
@@ -628,30 +631,6 @@ def statement():
         expression(Tag.Assign)
         match(';')
 
-def function_parameter():
-    type_ = None
-    params = 0
-    while token != ')':
-        type_ = Type.INT
-        if token == Tag.Int:
-            match(Tag.Int)
-        elif token == Tag.Char:
-            type_ = Type.CHAR
-            match(Tag.Char)
-        while token == Tag.Mul:
-            match(Tag.Mul)
-            type_ = type_ + Type.PTR
-
-        if token != Tag.Id:
-            raise Exception
-            sys.exit()
-        if current_id.Class == Tag.Loc:
-            raise Exception
-            sys.exit()
-        match(Tag.Id)
-        # here !!
-
-
 
 
 
@@ -819,21 +798,66 @@ def next():
         # skip other character included space tab ...
 
 
-def enum_declaration():
-    i = 0
-    while token != '}':
+def function_parameter():
+    # parse function parameter, eg (int arg1, char arg2, int *arg3)
+    params = 0
+    while token != ')':
+        # 
+        if token == Tag.Int:
+            type = Type.INT
+            match(Tag.Int)
+        elif token == Tag.Char:
+            type = Type.CHAR
+            match(Tag.Char)
+
+        # pointer type
+        while token == Tag.Mul:
+            match(Tag.Mul)
+            type = type + Type.PTR
+
         if token != Tag.Id:
-            raise SyntaxException
+            raise SyntaxException('illegal parameter declaration')
             sys.exit()
-        next()
-        if token == Tag.Assign:
-            # parse {a=1}
-            next()
-            if token != Tag.Num:
-                raise SyntaxException
-                sys.exit()
-            i = token_val
-            next()
+
+        match(Tag.Id)
+
+        if token == ',':
+            match(',')
+        # here !!
+    bp = params + 1
+
+
+def function_body():
+    pos_local = index_of_bp
+
+    while token == Tag.Int or token == Tag.Char:
+        if token == Tag.Int:
+            base_type = Type.INT
+        if token == Tag.Char:
+            base_type = Type.Char
+        match(token)
+
+        while token != ';':
+            type = base_type
+            while token == Tag.Mul:
+                match(Tag.Mul)
+                type = type + Type.PTR
+
+            if token != Tag.Id:
+                raise SyntaxException('illegal decalaration')
+
+            match(Tag.Id)
+
+        match(';')
+    IL.append('ENT')
+    IL.append(pos_local - index_of_bp)
+
+    while token != '}':
+        statement()
+
+    IL.append('LEV')
+
+
 
 
 
@@ -844,55 +868,53 @@ def function_declaration():
     match('{')
     function_body()
 
+    # pass
+
 
 
 def global_declaration():
+    global current_id
     type = None
-    base_type = Type.INT
     i = None
 
-    if token == Tag.Enum:
-        match(Tag.Enum)
-        if token != '{':
-            match(Tag.Id)
-        else:
-            match('{')
-            enum_declaration()
-            match('}')
-
-        match(';')
-        return
-
+    
+    # parse declaration type, eg int char double
     if token == Tag.Int:
         match(Tag.Int)
+        base_type = Type.INT
     elif token == Tag.Char:
         match(Tag.Char)
         base_type = Type.CHAR
+    # need to support double type !!!
 
     while token != ';' and token != '}':
         type = base_type
+        # pointer type Maybe there are many *
         while token == Tag.Mul:
-            mathc(Tag.Mul)
+            match(Tag.Mul)
             type = type + Type.PTR
 
         if token != Tag.Id:
-            raise SyntaxException('invalid  declaration')
+            raise SyntaxException('invalid declaration')
             sys.exit()
 
-        # How to avoid duplicate declaration
+        # How to avoid duplicate declaration ??
 
         match(Tag.Id)
         current_id.type = type
-
+        
         if token == '(':
+            # It is a function
             current_id.klass = Tag.Fun
-            current_id.value = len(IL)
+            current_id.value = len(IL)  # store the address of function
+            # parse function
             function_declaration()
-        else
-            # issue
+        else:
+            # It is a variable
             current_id.klass = Tag.Glo
-            current_id.value = data
-            data = data + 4
+            current_id.value = len(data) - 1
+            data.append(None)
+            data += 1
 
         if token == ',':
             match(',')
