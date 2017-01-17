@@ -36,7 +36,7 @@ DATA_MAX_SIZE = 128
 '''
 
 stack = [None] * STACK_MAX_SIZE  # stack
-data = [] * DATA_MAX_SIZE # data segment
+data = [None] * DATA_MAX_SIZE # data segment
 memory = [None] * MEMORY_MAX_SIZE  # memory (remaining memory)
 pc = 0  # program counter
 sp = STACK_MAX_SIZE - 1  # stack pointer
@@ -202,14 +202,25 @@ class SyntaxException(Exception):
     def __str__(self):
         return 'SyntaxError: {0}'.format(self.msg)
 
+class  RuntimeException(Exception):
+
+    def __init__(self, msg=''):
+        self.msg = msg
+
+    def __str__(self):
+        return 'RuntimeError: {0}'.format(self.msg)
+
+
 # match the token and get next token
 def match(tk):
     if token == tk:
         next()
     else:
-        raise SyntaxException
+        raise SyntaxException('mismatch')
 
 def expression(level):
+    print 'token in expression is ', token
+    print 'level in expression is ', level
     id = None
     tmp = None
     addr = None
@@ -230,8 +241,7 @@ def expression(level):
         match('"')
         while token == '"':
             match('"')
-            while token == '"':
-                match('"')
+        print '242 line exec!!!!'
         # data ??
         #
         # What the fuck
@@ -251,22 +261,26 @@ def expression(level):
 
         while token == Tag.Mul:
             match(Tag.Mul)
-            # expr_type =
+            expr_type = expr_type + Type.PTR
+
         match(')')
 
         IL.append('IMM')
         # CHAR 1 byte
         # INT 4 byte
         IL.append(1 if expr_type == Type.CHAR else 4)
+        expr_type = Type.INT
     elif token == Tag.Id:
         match(Tag.Id)
         id = current_id
+
         if token == '(':
+            # function call
             match('(')
             tmp = 0
             # parse the arguments
             while token != ')':
-                expression(Assign)
+                expression(Tag.Assign)
                 IL.append('PUSH')
                 tmp += 1
                 if token == ',':
@@ -274,10 +288,10 @@ def expression(level):
             match(')')
 
             if id.klass == Tag.Sys:
-                IL.append(id.Value)
+                IL.append(id.value)
             elif id.klass == Tag.Fun:
                 IL.append('CALL')
-                IL.append(id.Value)
+                IL.append(id.value)
             else:
                 raise SyntaxException('illegal function')
                 sys.exit()
@@ -287,16 +301,20 @@ def expression(level):
                 IL.append('ADJ')
                 IL.append(tmp)
             expr_type = id.Type
-        elif id.klass == Tag.Num:
-            IL.append('IMM')
-            IL.append(id.Value)
-            expr_type = Type.INT
         else:
+            # variable
             if id.klass == Tag.Loc:
                 IL.append('LEA')
-                IL.append(index_of_bp - id.Value)
+                IL.append(index_of_bp - id.value)
+            elif id.klass == Tag.Glo:
+                IL.append('IMM')
+                IL.append(id.value)
             else:
-                pass
+                raise Exception
+                sys.exit()
+            expr_type = id.type
+            IL.append('LC' if id.type == Type.CHAR else 'LI')
+
     elif token == '(':
         match('(')
         if token == Tag.Int or token == Tag.Char:
@@ -307,7 +325,7 @@ def expression(level):
                tmp = tmp + Type.PTR
             match(')')
             expression(Tag.Inc)
-            expression(Tag.Inc)
+            expr_type = tmp
         else:
             expression(Tag.Assign)
             match(')')
@@ -393,11 +411,12 @@ def expression(level):
                 IL[-1] = 'PUSH'
             else:
                 raise SyntaxException('bad lvalue in assignment')
+                sys.exit()
             expression(Tag.Assign)
             expr_type = tmp
             IL.append('SC' if expr_type == Type.CHAR else 'SI')
         elif token == Tag.Cond:
-            match(Cond)
+            match(Tag.Cond)
             IL.append('JZ')
             IL.append(None)
             addr = len(IL) - 1  # get the last address
@@ -560,7 +579,7 @@ def expression(level):
             IL.append('IMM')
             IL.append(4 if expr_type > Type.PTR else 1)
             IL.append('ADD' if token == Tag.Inc else 'SUB')
-            IL.append('ADD' if expr_type == Type.CHAR else 'SI')
+            IL.append('SC' if expr_type == Type.CHAR else 'SI')
             IL.append('PUSH')
             IL.append('IMM')
             IL.append(4 if expr_type > Type.PTR else 1)
@@ -655,6 +674,7 @@ def next():
     global peek
     global token
     global token_val
+    global data
     global string
     global current_id
 
@@ -708,8 +728,13 @@ def next():
                 ptr += 1
             ptr += 1
             string = buffer[last_pos:ptr-1]
+
+            # add string to data segment
+            data.append(string)
             if peek == '\'':
+                # single character
                 token = Tag.Num
+            token_val = len(data) - 1  
             return
         elif peek == '/':
             # parse the comment // or Div /
@@ -837,6 +862,13 @@ def function_parameter():
 
         match(Tag.Id)
 
+        # important !!
+        current_id.klass = Tag.LOC
+        current_id.type = type
+        current_id.value = params
+        params += 1
+
+
         if token == ',':
             match(',')
         # here !!
@@ -857,12 +889,18 @@ def function_body():
             type = base_type
             while token == Tag.Mul:
                 match(Tag.Mul)
-                type = type + Type.PTR
+                type = type + Type.PTRs
 
             if token != Tag.Id:
                 raise SyntaxException('illegal decalaration')
 
             match(Tag.Id)
+            current_id.klass = Tag.Loc
+            current_id.type = type
+            pos_local += 1
+            current_id.value = pos_local 
+            if token == ',':
+                match(',')
 
         match(';')
     IL.append('ENT')
@@ -889,6 +927,7 @@ def function_declaration():
 
 
 def global_declaration():
+    global data
     global current_id
     type = None
     i = None
@@ -901,6 +940,8 @@ def global_declaration():
     elif token == Tag.Char:
         match(Tag.Char)
         base_type = Type.CHAR
+    else:
+        base_type = Type.INT
     # need to support double type !!!
 
     while token != ';' and token != '}':
@@ -915,7 +956,7 @@ def global_declaration():
             sys.exit()
 
         # How to avoid duplicate declaration like this ??
-        if current_id.type is not None:
+        if current_id.klass is not None:
             raise SyntaxException('duplicate declaration')
             sys.exit()
         match(Tag.Id)
@@ -932,7 +973,6 @@ def global_declaration():
             current_id.klass = Tag.Glo
             current_id.value = len(data) - 1
             data.append(None)
-            data += 1
 
         if token == ',':
             match(',')
@@ -1079,7 +1119,9 @@ def test():
     global length
     buffer = '''
 #include <stdio.h>
-int main(void) {
+int x;
+x = 1;
+int main() {
     int i;
     i = 0;
     printf("Hello World! And i is %d\n", i);
